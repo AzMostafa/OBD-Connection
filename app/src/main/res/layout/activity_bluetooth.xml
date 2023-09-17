@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".BluetoothActivity">
+
+    <TextView
+        android:id="@+id/lTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:layout_margin="16dp"
+        android:text="Connection of OBD-II"
+        android:textColor="@color/A1"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:id="@+id/lBtn"
+        android:layout_width="match_parent"
+        android:layout_height="45dp"
+        android:layout_below="@+id/lTitle"
+        android:layout_marginBottom="16dp"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp">
+
+        <Button
+            android:id="@+id/btn_BluetoothDevice"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Bluetooth Device" />
+
+        <Button
+            android:id="@+id/btn_LogStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Logcat" />
+    </LinearLayout>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@+id/btn_Bluetooth"
+        android:layout_below="@+id/lBtn">
+
+        <LinearLayout
+            android:id="@+id/lBluetoothDevice"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="invisible"
+            android:orientation="vertical"
+            android:weightSum="100">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="45dp"
+                android:background="@color/A1_1"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="16dp"
+                android:text="Paired Device"
+                android:textStyle="bold"
+                android:textSize="16sp"/>
+
+            <ListView
+                android:id="@+id/lPairedBluetooth"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="16dp"
+                android:layout_weight="50"
+                android:layout_marginTop="5dp"
+                android:divider="@android:color/transparent"
+                android:dividerHeight="15dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="45dp"
+                android:background="@color/A1_1"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="16dp"
+                android:text="Paired Device"
+                android:textStyle="bold"
+                android:textSize="16sp"/>
+
+            <ListView
+                android:id="@+id/lDiscoveredBluetooth"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="16dp"
+                android:layout_weight="50"
+                android:layout_marginTop="5dp"
+                android:divider="@android:color/transparent"
+                android:dividerHeight="15dp" />
+        </LinearLayout>
+
+
+        <LinearLayout
+            android:id="@+id/lLogcat"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="visible"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="45dp"
+                android:background="@color/A1"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="16dp"
+                android:text="Logcat"
+                android:textStyle="bold"
+                android:textSize="16sp"/>
+
+            <ListView
+                android:id="@+id/lListLogcat"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="10dp"
+                android:layout_weight="1"
+                android:layout_marginTop="5dp"
+                android:animationCache="false"
+                android:background="@android:color/transparent"
+                android:cacheColorHint="@android:color/transparent"
+                android:divider="@android:color/transparent"
+                android:dividerHeight="1dp"
+                android:listSelector="@android:color/transparent"
+                android:scrollingCache="false"
+                android:smoothScrollbar="true" />
+        </LinearLayout>
+    </RelativeLayout>
+
+    <Button
+        android:id="@+id/btn_Bluetooth"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:text="Find Bluetooth Device" />
+</RelativeLayout>

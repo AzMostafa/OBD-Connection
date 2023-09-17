@@ -367,14 +367,14 @@ class MainActivity : AppCompatActivity() {
 
     /// --------------------------------------- List Adapter ----------------------------------- ///
     inner class AdapterPairedBT(dataInput: List<String>) :
-        ArrayAdapter<String?>(context, R.layout.listview_items, dataInput) {
+        ArrayAdapter<String?>(context, R.layout.item_bluetooth, dataInput) {
 
         @SuppressLint("MissingPermission", "ViewHolder", "InflateParams")
         override fun getView(position: Int, view: View?, parent: ViewGroup): View {
 
             val activity = context as Activity
             val inflater = activity.layoutInflater
-            val rowView: View = inflater.inflate(R.layout.listview_items, null, true)
+            val rowView: View = inflater.inflate(R.layout.item_bluetooth, null, true)
 
             val txtName = rowView.findViewById<TextView>(R.id.txt_Name)
             val txtMac = rowView.findViewById<TextView>(R.id.txt_MacAddress)
@@ -397,14 +397,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     inner class AdapterDiscoveredBT(dataInput: List<String>) :
-        ArrayAdapter<String?>(context, R.layout.listview_items, dataInput) {
+        ArrayAdapter<String?>(context, R.layout.item_bluetooth, dataInput) {
 
         @SuppressLint("MissingPermission", "ViewHolder", "InflateParams")
         override fun getView(position: Int, view: View?, parent: ViewGroup): View {
 
             val activity = context as Activity
             val inflater = activity.layoutInflater
-            val rowView: View = inflater.inflate(R.layout.listview_items, null, true)
+            val rowView: View = inflater.inflate(R.layout.item_bluetooth, null, true)
 
             val txtName = rowView.findViewById<TextView>(R.id.txt_Name)
             val txtMac = rowView.findViewById<TextView>(R.id.txt_MacAddress)
