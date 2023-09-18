@@ -7,8 +7,9 @@ object Constants {
     const val STATE_LISTEN = 1
     const val STATE_CONNECTING = 2
     const val STATE_CONNECTED = 3
+    const val STATE_CONNECT_LOST = 4
+    const val STATE_CONNECT_FAILED = 5
 
-    const val REQUEST_BT_ENABLE: Int = 1004
     const val REQUEST_BT_PERMISSION: Int = 1005
 
     const val ECU_RESET = "ATZ"

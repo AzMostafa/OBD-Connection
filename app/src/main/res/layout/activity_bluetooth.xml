@@ -96,7 +96,6 @@
                 android:dividerHeight="15dp" />
         </LinearLayout>
 
-
         <LinearLayout
             android:id="@+id/lLogcat"
             android:layout_width="match_parent"
@@ -129,6 +128,30 @@
                 android:listSelector="@android:color/transparent"
                 android:scrollingCache="false"
                 android:smoothScrollbar="true" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="45dp"
+                android:layout_marginTop="16dp"
+                android:paddingHorizontal="16dp"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/edt_SendECURequest"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:textStyle="bold"
+                    android:textSize="19sp"
+                    android:textColor="#3578DD"/>
+
+                <Button
+                    android:id="@+id/btn_SendECURequest"
+                    android:layout_width="100dp"
+                    android:layout_marginLeft="16dp"
+                    android:layout_height="match_parent"
+                    android:text="Send" />
+            </LinearLayout>
         </LinearLayout>
     </RelativeLayout>
 

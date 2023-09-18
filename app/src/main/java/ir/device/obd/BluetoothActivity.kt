@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
@@ -13,6 +14,8 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.View
@@ -20,16 +23,15 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import java.util.Timer
-import java.util.TimerTask
-
 
 @SuppressLint("InlinedApi", "MissingPermission")
 class BluetoothActivity : AppCompatActivity() {
@@ -47,14 +49,17 @@ class BluetoothActivity : AppCompatActivity() {
         Manifest.permission.ACCESS_COARSE_LOCATION
     )
     private var listLog: MutableList<String> = mutableListOf()
-    private val listPairedBluetooth: HashMap<String, String> = hashMapOf()
-    private var listDiscoveredBluetooth: HashMap<String, String> = hashMapOf()
+    private val listPairedBluetooth: HashMap<String, Array<String>> = hashMapOf()
+    private var listDiscoveredBluetooth: HashMap<String, Array<String>> = hashMapOf()
 
     private val bluetoothManager by lazy {
         applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     }
     private val bluetoothAdapter by lazy {
         bluetoothManager.adapter
+    }
+    private val bluetoothService by lazy {
+        MBtService(context, bluetoothHandler)
     }
     private val locationManager by lazy {
         applicationContext.getSystemService(LOCATION_SERVICE) as LocationManager
@@ -75,8 +80,10 @@ class BluetoothActivity : AppCompatActivity() {
         val btnBTDevice = findViewById<Button>(R.id.btn_BluetoothDevice)
         val btnLogcat = findViewById<Button>(R.id.btn_LogStatus)
         val btnBluetooth = findViewById<Button>(R.id.btn_Bluetooth)
+        val btnSendECUReuest = findViewById<Button>(R.id.btn_SendECURequest)
         val lBTDevice = findViewById<LinearLayout>(R.id.lBluetoothDevice)
         val lLogcat = findViewById<LinearLayout>(R.id.lLogcat)
+        val edtECURequest = findViewById<EditText>(R.id.edt_SendECURequest)
         lLog = findViewById(R.id.lListLogcat)
         lPaired = findViewById(R.id.lPairedBluetooth)
         lDiscovered = findViewById(R.id.lDiscoveredBluetooth)
@@ -119,12 +126,33 @@ class BluetoothActivity : AppCompatActivity() {
             }
         }
 
-        lPaired.onItemClickListener = AdapterView.OnItemClickListener { _, view, _, _ ->
+        btnSendECUReuest.setOnClickListener {
+            if (bluetoothService.getState() == Constants.STATE_CONNECTED){
+                val request = edtECURequest.text.toString()
+                setECURequest(request)
+            } else {
+                Toast.makeText(context, "Connect to OBD.", Toast.LENGTH_SHORT).show()
+            }
+        }
 
+        lPaired.onItemClickListener = AdapterView.OnItemClickListener { _, view, _, _ ->
+            val txtMacDevice = view.findViewById<TextView>(R.id.txt_MacAddress)
+            val deviceMac = txtMacDevice.text.toString()
+            if (!(deviceMac == "" || deviceMac == "null")) {
+                bluetoothConnectingLauncher(deviceMac)
+            } else {
+                logcat("Selected MacAddress is empty or null!", "e")
+            }
         }
 
         lDiscovered.onItemClickListener = AdapterView.OnItemClickListener { _, view, _, _ ->
-
+            val txtMacDevice = view.findViewById<TextView>(R.id.txt_MacAddress)
+            val deviceMac = txtMacDevice.text.toString()
+            if (!(deviceMac == "" || deviceMac == "null")) {
+                bluetoothConnectingLauncher(deviceMac)
+            } else {
+                logcat("Selected MacAddress is empty or null!", "e")
+            }
         }
     }
 
@@ -154,7 +182,10 @@ class BluetoothActivity : AppCompatActivity() {
                     val deviceName = device.name.toString()
                     val deviceMac = device.address.toString()
 
-                    listPairedBluetooth[deviceName] = deviceMac
+                    val btC: BluetoothClass = device.bluetoothClass
+                    val deviceClass = BluetoothDeviceType.findByValue(btC.deviceClass).toString()
+                    val arrayDetail = arrayOf(deviceMac, deviceClass)
+                    listPairedBluetooth[deviceName] = arrayDetail
                 }
                 if (listPairedBluetooth.size != 0) {
                     val adapter = AdapterListViewPaired(listPairedBluetooth)
@@ -173,6 +204,31 @@ class BluetoothActivity : AppCompatActivity() {
                 bluetoothAdapter?.startDiscovery()
             } else {
                 bluetoothAdapter?.startDiscovery()
+            }
+        }
+    }
+
+    private fun bluetoothConnectingLauncher(deviceMac: String) {
+        if (bluetoothService.getState() == Constants.STATE_NONE || bluetoothService.getState() == Constants.STATE_LISTEN) {
+            bluetoothService.start()
+
+            val device: BluetoothDevice = bluetoothAdapter.getRemoteDevice(deviceMac)
+            bluetoothService.connect(device)
+        } else {
+            Toast.makeText(context, "Connection Process is Running.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun setECURequest(request: String) {
+        logcat("SetECURequest")
+        if (bluetoothService.getState() == Constants.STATE_CONNECTED) {
+            try {
+                if (request.isNotEmpty()) {
+                    val textByte = request + "\r"
+                    bluetoothService.write(textByte.toByteArray())
+                }
+            } catch (e: Exception) {
+                logcat("unable to send request to ECU! \n${e.message}", "e")
             }
         }
     }
@@ -218,6 +274,28 @@ class BluetoothActivity : AppCompatActivity() {
         }
     }
 
+    private var bluetoothHandler = Handler(Looper.getMainLooper()) {
+        when (it.what) {
+            Constants.STATE_LOG -> {
+                logcat(it.data.getString("TEXT").toString())
+            }
+
+            Constants.STATE_CONNECT_LOST -> {
+
+            }
+
+            Constants.STATE_CONNECT_FAILED -> {
+
+            }
+
+            Constants.STATE_CONNECTED -> {
+                logcat("Bluetooth Device is Connected :)", "d")
+                setECURequest(Constants.ECU_RESET)
+            }
+        }
+        true
+    }
+
     private val bluetoothFindReceiver = object : BroadcastReceiver() {
 
         override fun onReceive(context: Context, intent: Intent) {
@@ -241,8 +319,16 @@ class BluetoothActivity : AppCompatActivity() {
                         if (device != null) {
                             val deviceName = device.name.toString()
                             val deviceMac = device.address.toString()
-                            logcat("Bluetooth Discovering Device $deviceName | $deviceMac", "d")
-                            listDiscoveredBluetooth[deviceName] = deviceMac
+
+                            val btC: BluetoothClass = device.bluetoothClass
+                            val deviceClass =
+                                BluetoothDeviceType.findByValue(btC.deviceClass).toString()
+                            val arrayDetail = arrayOf(deviceMac, deviceClass)
+                            logcat(
+                                "Bluetooth Discovering Device $deviceName | $deviceMac | $deviceClass",
+                                "d"
+                            )
+                            listDiscoveredBluetooth[deviceName] = arrayDetail
 
                             val adapter = AdapterListViewDiscovered(listDiscoveredBluetooth)
                             lDiscovered.adapter = adapter
@@ -251,7 +337,7 @@ class BluetoothActivity : AppCompatActivity() {
                             logcat("Bluetooth Discovering device is null!", "e")
                         }
                     } catch (e: Exception) {
-                        logcat("Bluetooth Discovering has Error! \n ${e.message}", "e")
+
                     }
                 }
             }
@@ -280,10 +366,10 @@ class BluetoothActivity : AppCompatActivity() {
         }
     }
 
-    inner class AdapterListViewPaired(dataInput: HashMap<String, String>) :
+    inner class AdapterListViewPaired(dataInput: HashMap<String, Array<String>>) :
         ArrayAdapter<String>(context, R.layout.item_bluetooth, dataInput.keys.toTypedArray()) {
 
-        private var dataInput: HashMap<String, String>
+        private var dataInput: HashMap<String, Array<String>>
 
         init {
             this.dataInput = dataInput
@@ -298,13 +384,15 @@ class BluetoothActivity : AppCompatActivity() {
 
             val txtName = rowView.findViewById<TextView>(R.id.txt_Name)
             val txtMac = rowView.findViewById<TextView>(R.id.txt_MacAddress)
+            val txtClass = rowView.findViewById<TextView>(R.id.txt_class)
 
             try {
                 val deviceName = dataInput.keys.elementAt(position)
-                val deviceMac = dataInput.values.elementAt(position)
-                if (deviceMac.isNotEmpty()) {
+                val deviceDetail = dataInput.values.elementAt(position)
+                if (deviceDetail[0].isNotEmpty()) {
                     txtName.text = deviceName
-                    txtMac.text = deviceMac
+                    txtMac.text = deviceDetail[0]
+                    txtClass.text = deviceDetail[1]
                 } else {
                     txtName.text = "unKnown"
                     txtMac.text = "--:--:--:--:--:--"
@@ -317,10 +405,10 @@ class BluetoothActivity : AppCompatActivity() {
         }
     }
 
-    inner class AdapterListViewDiscovered(dataInput: HashMap<String, String>) :
+    inner class AdapterListViewDiscovered(dataInput: HashMap<String, Array<String>>) :
         ArrayAdapter<String>(context, R.layout.item_bluetooth, dataInput.keys.toTypedArray()) {
 
-        private var dataInput: HashMap<String, String>
+        private var dataInput: HashMap<String, Array<String>>
 
         init {
             this.dataInput = dataInput
@@ -335,13 +423,15 @@ class BluetoothActivity : AppCompatActivity() {
 
             val txtName = rowView.findViewById<TextView>(R.id.txt_Name)
             val txtMac = rowView.findViewById<TextView>(R.id.txt_MacAddress)
+            val txtClass = rowView.findViewById<TextView>(R.id.txt_class)
 
             try {
                 val deviceName = dataInput.keys.elementAt(position)
-                val deviceMac = dataInput.values.elementAt(position)
-                if (deviceMac.isNotEmpty()) {
+                val deviceDetail = dataInput.values.elementAt(position)
+                if (deviceDetail[0].isNotEmpty()) {
                     txtName.text = deviceName
-                    txtMac.text = deviceMac
+                    txtMac.text = deviceDetail[0]
+                    txtClass.text = deviceDetail[1]
                 } else {
                     txtName.text = "unKnown"
                     txtMac.text = "--:--:--:--:--:--"
@@ -380,8 +470,10 @@ class BluetoothActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         try {
+            bluetoothService.stop()
             unregisterReceiver(bluetoothFindReceiver)
-        } catch (_:Exception){}
+        } catch (_: Exception) {
+        }
     }
 
     override fun onRequestPermissionsResult(

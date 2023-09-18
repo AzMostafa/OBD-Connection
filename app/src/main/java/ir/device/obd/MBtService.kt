@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.os.Bundle
@@ -22,11 +21,9 @@ class MBtService(context: Context, mHandler: Handler) {
     private var context: Context
     private var mHandler: Handler
     private var serviceStatus = Constants.STATE_NONE
-    private val NAME_BT = "ObdElm327"
     private val UUID_BT = UUID.fromString("0001101-0000-1000-8000-00805F9B34FB")
 
     private var mAdapter: BluetoothAdapter? = null
-    private var mAcceptThread: AcceptThread? = null
     private var mConnectThread: ConnectThread? = null
     private var mConnectedThread: ConnectedThread? = null
 
@@ -38,19 +35,7 @@ class MBtService(context: Context, mHandler: Handler) {
         mAdapter = bluetoothManager.adapter
         serviceStatus = Constants.STATE_NONE
 
-        setHandler("init MBtService is Done.")
-    }
-
-    fun setHandler(text: String, mode: String? = null, state: Int? = null) {
-        val msg: Message = if (mode == null) {
-            mHandler.obtainMessage(Constants.STATE_LOG)
-        } else {
-            mHandler.obtainMessage(state!!)
-        }
-        val bundle = Bundle()
-        bundle.putString("TEXT", text)
-        msg.data = bundle
-        mHandler.sendMessage(msg)
+        bluetoothStatusHandler("init MBtService is Done.")
     }
 
     fun start() {
@@ -78,10 +63,6 @@ class MBtService(context: Context, mHandler: Handler) {
             mConnectedThread = null
         }
 
-        if (mAcceptThread != null) {
-            mAcceptThread!!.cancel()
-            mAcceptThread = null
-        }
         setState(Constants.STATE_NONE)
     }
 
@@ -118,7 +99,7 @@ class MBtService(context: Context, mHandler: Handler) {
     }
 
     @Synchronized
-    fun connected(socket: BluetoothSocket, socketType: String) {
+    fun connected(socket: BluetoothSocket) {
         // ----> Cancel the thread that completed the connection:
         if (mConnectThread != null) {
             mConnectThread!!.cancel()
@@ -131,13 +112,8 @@ class MBtService(context: Context, mHandler: Handler) {
             mConnectedThread = null
         }
 
-        // ----> Cancel the accept thread because we only want to connect to one device:
-        if (mAcceptThread != null) {
-            mAcceptThread!!.cancel()
-            mAcceptThread = null
-        }
         // ----> Start the thread to manage the connection and perform transmissions:
-        mConnectedThread = ConnectedThread(socket, socketType)
+        mConnectedThread = ConnectedThread(socket)
         mConnectedThread!!.start()
 
         setState(Constants.STATE_CONNECTED)
@@ -145,159 +121,90 @@ class MBtService(context: Context, mHandler: Handler) {
 
     fun write(out: ByteArray) {
         // ----> Create temporary object:
-        var CT: ConnectedThread
+        var cT: ConnectedThread
         // ----> Synchronize a copy of the ConnectedThread:
         synchronized(this) {
             if (serviceStatus != Constants.STATE_CONNECTED) return
-            CT = mConnectedThread!!
+            cT = mConnectedThread!!
         }
-        // ----> Perform the write unsynchronized:
-        CT.write(out)
+        // ----> Perform the write synchronized:
+        cT.write(out)
     }
 
-    private fun connectionFailed() {
+    private fun bluetoothStatusHandler(text: String, mode: String? = null, state: Int? = null) {
+        val msg: Message = if (mode == null) {
+            mHandler.obtainMessage(Constants.STATE_LOG)
+        } else {
+            mHandler.obtainMessage(state!!)
+        }
+        val bundle = Bundle()
+        bundle.putString("TEXT", text)
+        msg.data = bundle
+        mHandler.sendMessage(msg)
+    }
+
+    private fun bluetoothConnectionFailed() {
         // ----> Start the service over to restart listening mode:
         setState(Constants.STATE_NONE)
-        setHandler("Bluetooth connection Failed")
-        this@MBtService.start()
+        bluetoothStatusHandler(
+            "Bluetooth connection Failed.",
+            "STATE_CONNECT_FAILED",
+            Constants.STATE_CONNECT_FAILED
+        )
     }
 
-    private fun connectionLost() {
+    private fun bluetoothConnectionLost() {
         // ----> Start the service over to restart listening mode:
-        setHandler("Bluetooth connection Lost")
-        this@MBtService.start()
-    }
-
-    private inner class AcceptThread : Thread() {
-
-        private val mSocketType: String? = null
-        private val mmServerSocket: BluetoothServerSocket?
-
-        init {
-            setHandler("init AcceptThread")
-            var tmp: BluetoothServerSocket? = null
-            // ----> Create a new listening server socket
-            try {
-                tmp = mAdapter!!.listenUsingRfcommWithServiceRecord(NAME_BT, UUID_BT)
-            } catch (e: IOException) {
-                setHandler("[AcceptThread] Socket Type: " + mSocketType + "listen() failed")
-                Log.e(
-                    "LOG",
-                    "Socket Type: " + mSocketType + "listen() failed", e
-                )
-            }
-            mmServerSocket = tmp
-        }
-
-        override fun run() {
-            name = "AcceptThread$mSocketType"
-            var socket: BluetoothSocket? = null
-
-            // ----> Listen to the server socket if we're not connected:
-            while (serviceStatus != Constants.STATE_CONNECTED) {
-                setHandler("AcceptThread run() and serviceStatus=$serviceStatus")
-                socket = try {
-                    // ----> This is a blocking call and will only return on a
-                    // ----> successful connection or an exception:
-                    mmServerSocket!!.accept()
-                } catch (e: IOException) {
-                    setHandler("[AcceptThread] Socket Type: " + mSocketType + "accept() failed")
-                    Log.e(
-                        "LOG",
-                        "Socket Type: " + mSocketType + "accept() failed", e
-                    )
-                    break
-                }
-
-                // ----> If a connection was accepted:
-                if (socket != null) {
-                    synchronized(this@MBtService) {
-                        when (serviceStatus) {
-                            Constants.STATE_LISTEN, Constants.STATE_CONNECTING -> {
-                                // ----> Situation normal Start the connected thread:
-                                connected(socket, mSocketType!!)
-                            }
-
-                            else -> {
-                                // ----> Either not ready or already connected. Terminate new socket:
-                                try {
-                                    socket.close()
-                                } catch (e: IOException) {
-                                    setHandler("Could not close unwanted socket")
-                                    Log.e(
-                                        "LOG",
-                                        "Could not close unwanted socket", e
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        fun cancel() {
-            try {
-                mmServerSocket!!.close()
-            } catch (e: IOException) {
-                setHandler("Socket Type" + mSocketType + "close() of server failed")
-                Log.e(
-                    "LOG",
-                    "Socket Type" + mSocketType + "close() of server failed", e
-                )
-            }
-        }
+        setState(Constants.STATE_NONE)
+        bluetoothStatusHandler(
+            "Bluetooth connection Lost.",
+            "STATE_CONNECT_LOST",
+            Constants.STATE_CONNECT_LOST
+        )
     }
 
     private inner class ConnectThread(mmDevice: BluetoothDevice) : Thread() {
 
-        private val mSocketType: String? = null
-        private var mmDevice: BluetoothDevice? = null
-        private val mmSocket: BluetoothSocket?
-
-        init {
-            setHandler("init ConnectThread")
-            this.mmDevice = mmDevice
-            var tmp: BluetoothSocket? = null
-
-            // ----> Get a BluetoothSocket for a connection with the
-            // ----> given BluetoothDevice:
-            try {
-                tmp = mmDevice.createRfcommSocketToServiceRecord(UUID_BT)
-            } catch (e: IOException) {
-                setHandler("Socket Type: " + mSocketType + "create() failed")
-                Log.e(
-                    "LOG",
-                    "Socket Type: " + mSocketType + "create() failed", e
-                )
-            }
-            mmSocket = tmp
+        private val mmSocket: BluetoothSocket? by lazy(LazyThreadSafetyMode.NONE) {
+            mmDevice.createRfcommSocketToServiceRecord(UUID_BT)
         }
 
         override fun run() {
-            setHandler("ConnectThread run() SocketType:$mSocketType")
-            name = "ConnectThread$mSocketType"
-
+            bluetoothStatusHandler("ConnectThread START")
             // ----> Always cancel discovery because it will slow down a connection:
-            mAdapter?.cancelDiscovery()
+            if (mAdapter!!.isDiscovering) {
+                mAdapter?.cancelDiscovery()
+            }
 
             // ----> Make a connection to the BluetoothSocket:
             try {
-                // ----> This is a blocking call and will only return on a
-                // ----> successful connection or an exception:
+                // ----> This is a blocking call and will only return on a successful connection or an exception:
                 mmSocket!!.connect()
+                bluetoothStatusHandler(
+                    "ConnectThread Socket has been connected.",
+                    "STATE_CONNECTED",
+                    Constants.STATE_CONNECTED
+                )
             } catch (e: IOException) {
+                bluetoothStatusHandler("[ConnectThread] Socket connect() failed \n${e.message}")
+                Log.e(
+                    "LOG",
+                    "Socket connect() failed", e
+                )
                 // ----> Close the socket:
                 try {
                     mmSocket!!.close()
                 } catch (e2: IOException) {
-                    setHandler("unable to close() $mSocketType socket during connection failure")
+                    bluetoothStatusHandler(
+                        "unable to close() socket during connection failure \n" +
+                                "${e2.message}"
+                    )
                     Log.e(
                         "LOG",
-                        "unable to close() $mSocketType socket during connection failure", e2
+                        "unable to close() socket during connection failure", e2
                     )
                 }
-                connectionFailed()
+                bluetoothConnectionFailed()
                 return
             }
 
@@ -305,62 +212,57 @@ class MBtService(context: Context, mHandler: Handler) {
             synchronized(this@MBtService) { mConnectThread = null }
 
             // ----> Start the connected thread
-            connected(mmSocket, mSocketType!!)
+            connected(mmSocket!!)
         }
 
         fun cancel() {
             try {
+                setState(Constants.STATE_NONE)
                 mmSocket!!.close()
             } catch (e: IOException) {
-                setHandler("close() of connect $mSocketType socket failed")
+                bluetoothStatusHandler("close() of connect socket failed")
                 Log.e(
                     "LOG",
-                    "close() of connect $mSocketType socket failed", e
+                    "close() of connect socket failed", e
                 )
             }
         }
     }
 
-    private inner class ConnectedThread(socket: BluetoothSocket, socketType: String) : Thread() {
+    private inner class ConnectedThread(socket: BluetoothSocket) : Thread() {
 
-        private val mmSocket: BluetoothSocket
-        private val mmInStream: InputStream?
-        private val mmOutStream: OutputStream?
-        private var s: String = ""
-        private var msg: String = ""
-
-        init {
-            setHandler("create ConnectedThread: $socketType")
-            mmSocket = socket
-            var tmpIn: InputStream? = null
-            var tmpOut: OutputStream? = null
-
-            // ----> Get the BluetoothSocket input and output streams:
-            try {
-                tmpIn = socket.inputStream
-                tmpOut = socket.outputStream
-            } catch (e: IOException) {
-                setHandler("temp sockets not created")
-                Log.e("LOG", "temp sockets not created", e)
-            }
-            mmInStream = tmpIn
-            mmOutStream = tmpOut
+        private var text: String = ""
+        private var str: String = ""
+        private val mmSocket: BluetoothSocket by lazy {
+            socket
+        }
+        private val mmInStream: InputStream? by lazy {
+            socket.inputStream
+        }
+        private val mmOutStream: OutputStream? by lazy {
+            socket.outputStream
         }
 
         override fun run() {
             while (true) {
                 try {
-                    val buffer = ByteArray(1)
-                    val s = String(buffer)
-                    for (element in s) {
-                        msg += element
-                        setHandler("Message is $msg")
-                    }
                     // ----> Do something with the bytes read in There are bytesRead bytes in tempBuffer:
+                    val buffer = ByteArray(1)
+                    mmInStream!!.read(buffer, 0, buffer.size)
+                    str = String(buffer)
+                    for (element in str) {
+                        text += element
+                        if (text.contains(">")) {
+                            if (text.isNotEmpty()) {
+                                bluetoothStatusHandler("READ: $text")
+                                text = ""
+                            } else {
+                                bluetoothStatusHandler("READ: text is Empty!")
+                            }
+                        }
+                    }
                 } catch (e: IOException) {
-                    connectionLost()
-                    // ----> Start the service over to restart listening mode:
-                    this@MBtService.start()
+                    bluetoothConnectionLost()
                     break
                 }
             }
@@ -369,18 +271,21 @@ class MBtService(context: Context, mHandler: Handler) {
         fun write(buffer: ByteArray) {
             try {
                 mmOutStream!!.write(buffer)
-                mmOutStream.flush()
+                mmOutStream!!.flush()
+
+                val writeMessage = String(buffer)
+                bluetoothStatusHandler("During write Request: $writeMessage")
             } catch (e: IOException) {
-                setHandler("Exception during write")
-                Log.e("LOG", "Exception during write", e)
+                bluetoothStatusHandler("Exception during write Error! \n${e.message}")
             }
         }
 
         fun cancel() {
             try {
+                setState(Constants.STATE_NONE)
                 mmSocket.close()
             } catch (e: IOException) {
-                setHandler("close() of connect socket failed")
+                bluetoothStatusHandler("close() of connect socket failed")
                 Log.e("LOG", "close() of connect socket failed", e)
             }
         }

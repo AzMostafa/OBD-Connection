@@ -1,2 +1,2 @@
-# Sc_App
-The Negative Application of Scarpin
+# OBD-II Connection
+The Negative Application for Connecting to OBD-II Device.
