@@ -64,6 +64,7 @@ class BluetoothActivity : AppCompatActivity() {
     private val locationManager by lazy {
         applicationContext.getSystemService(LOCATION_SERVICE) as LocationManager
     }
+
     private val isBluetoothEnabled: Boolean
         get() = bluetoothAdapter?.isEnabled == true
     private val isLocationEnabled: Boolean
@@ -127,7 +128,7 @@ class BluetoothActivity : AppCompatActivity() {
         }
 
         btnSendECUReuest.setOnClickListener {
-            if (bluetoothService.getState() == Constants.STATE_CONNECTED){
+            if (bluetoothService.getState() == Constants.STATE_CONNECTED) {
                 val request = edtECURequest.text.toString()
                 setECURequest(request)
             } else {
@@ -156,6 +157,62 @@ class BluetoothActivity : AppCompatActivity() {
         }
     }
 
+    // ------------------------------------------- OBD -----------------------------------------//
+    // --> ATZ       : reset all
+    // --> ATDP      : Describe the current Protocol
+    // --> ATAT0-1-2 : Adaptive Timing Off - Adaptive Timing Auto1 - Adaptive Timing Auto2
+    // --> ATE0-1    : Echo Off - Echo On
+    // --> ATSP0     : Set Protocol to Auto and save it
+    // --> ATMA      : Monitor All
+    // --> ATL1-0    : LineFeeds On - LineFeeds Off
+    // --> ATH1-0    : Headers On - Headers Off
+    // --> ATS1-0    : printing of Spaces On - printing of Spaces Off
+    // --> ATAL      : Allow Long (>7 byte) messages
+    // --> ATI       : Read ID
+    // --> ATRD      : Read the stored data
+    // --> ATSTFF    : Set time out to maximum
+    // --> ATSTHH    : Set timeout to 4ms
+    private val initCommands = arrayOf("ATL0", "ATE1", "ATH1", "ATAT1", "ATSTFF", "ATI", "ATDP", "ATSP0", "0100")
+    private var initCommandIndex = 0
+    private var initCommandCount = initCommands.size
+    private fun initializeCommands() {
+
+    }
+
+    private fun setECURequest(request: String) {
+        logcat("SetECURequest")
+        if (bluetoothService.getState() == Constants.STATE_CONNECTED) {
+            try {
+                if (request.isNotEmpty()) {
+                    val textByte = request + "\r"
+                    bluetoothService.write(textByte.toByteArray())
+                }
+            } catch (e: Exception) {
+                logcat("unable to send request to ECU! \n${e.message}", "e")
+            }
+        }
+    }
+
+    private fun cleanResponse(txt: String): String {
+        var text = txt
+
+        text = text.replace("null", "")
+        text = text.replace("\\s", "")  // ---> removes all [ \t\n\x0B\f\r]
+        text = text.replace(">", "")
+        text = text.replace("SEARCHING...", "")
+        text = text.replace("ATZ", "")
+        text = text.replace("ATI", "")
+        text = text.replace("atz", "")
+        text = text.replace("ati", "")
+        text = text.replace("ATDP", "")
+        text = text.replace("atdp", "")
+        text = text.replace("ATRV", "")
+        text = text.replace("atrv", "")
+
+        return text
+    }
+
+    // ------------------------------------- Bluetooth System -----------------------------------//
     private fun bluetoothSystemLauncher() {
         if (requiredPermissions()) {
             requestPermissions()
@@ -183,7 +240,8 @@ class BluetoothActivity : AppCompatActivity() {
                     val deviceMac = device.address.toString()
 
                     val btC: BluetoothClass = device.bluetoothClass
-                    val deviceClass = BluetoothDeviceType.findByValue(btC.deviceClass).toString()
+                    val deviceClass =
+                        MBtService.BluetoothDeviceType.findByValue(btC.deviceClass).toString()
                     val arrayDetail = arrayOf(deviceMac, deviceClass)
                     listPairedBluetooth[deviceName] = arrayDetail
                 }
@@ -219,73 +277,32 @@ class BluetoothActivity : AppCompatActivity() {
         }
     }
 
-    private fun setECURequest(request: String) {
-        logcat("SetECURequest")
-        if (bluetoothService.getState() == Constants.STATE_CONNECTED) {
-            try {
-                if (request.isNotEmpty()) {
-                    val textByte = request + "\r"
-                    bluetoothService.write(textByte.toByteArray())
-                }
-            } catch (e: Exception) {
-                logcat("unable to send request to ECU! \n${e.message}", "e")
-            }
-        }
-    }
-
-    private fun requiredPermissions(permission: String? = null): Boolean {
-        var isPermissionOK = false
-        if (permission == null) {
-            for (per in requiredPermissions) {
-                if (ContextCompat.checkSelfPermission(
-                        this,
-                        per
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    isPermissionOK = true
-                    break
-                }
-            }
-        } else {
-            isPermissionOK = ActivityCompat.checkSelfPermission(
-                context,
-                permission
-            ) == PackageManager.PERMISSION_GRANTED
-        }
-        return isPermissionOK
-    }
-
-    private fun requestPermissions() {
-        logcat("Request Permissions")
-        var result: Int
-        val listPermissionsNeeded: MutableList<String> = ArrayList()
-        for (per in requiredPermissions) {
-            result = ContextCompat.checkSelfPermission(applicationContext, per)
-            if (result != PackageManager.PERMISSION_GRANTED) {
-                listPermissionsNeeded.add(per)
-            }
-        }
-        if (listPermissionsNeeded.isNotEmpty()) {
-            ActivityCompat.requestPermissions(
-                this,
-                listPermissionsNeeded.toTypedArray(),
-                Constants.REQUEST_BT_PERMISSION
-            )
-        }
-    }
-
     private var bluetoothHandler = Handler(Looper.getMainLooper()) {
         when (it.what) {
             Constants.STATE_LOG -> {
                 logcat(it.data.getString("TEXT").toString())
             }
 
-            Constants.STATE_CONNECT_LOST -> {
+            Constants.STATE_READ -> {
+                val textResponse = it.data.getString("TEXT").toString()
+                val cleanResponse = cleanResponse(textResponse)
+                logcat(cleanResponse)
+            }
 
+            Constants.STATE_CONNECT_LOST -> {
+                Toast.makeText(
+                    context,
+                    "Your Connection is lost! Connect again.",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
 
             Constants.STATE_CONNECT_FAILED -> {
-
+                Toast.makeText(
+                    context,
+                    "Connecting has Failed! Try again.",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
 
             Constants.STATE_CONNECTED -> {
@@ -322,7 +339,8 @@ class BluetoothActivity : AppCompatActivity() {
 
                             val btC: BluetoothClass = device.bluetoothClass
                             val deviceClass =
-                                BluetoothDeviceType.findByValue(btC.deviceClass).toString()
+                                MBtService.BluetoothDeviceType.findByValue(btC.deviceClass)
+                                    .toString()
                             val arrayDetail = arrayOf(deviceMac, deviceClass)
                             logcat(
                                 "Bluetooth Discovering Device $deviceName | $deviceMac | $deviceClass",
@@ -441,6 +459,49 @@ class BluetoothActivity : AppCompatActivity() {
             }
 
             return rowView
+        }
+    }
+
+    // ------------------------------------------ Others ----------------------------------------//
+
+    private fun requiredPermissions(permission: String? = null): Boolean {
+        var isPermissionOK = false
+        if (permission == null) {
+            for (per in requiredPermissions) {
+                if (ContextCompat.checkSelfPermission(
+                        this,
+                        per
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    isPermissionOK = true
+                    break
+                }
+            }
+        } else {
+            isPermissionOK = ActivityCompat.checkSelfPermission(
+                context,
+                permission
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+        return isPermissionOK
+    }
+
+    private fun requestPermissions() {
+        logcat("Request Permissions")
+        var result: Int
+        val listPermissionsNeeded: MutableList<String> = ArrayList()
+        for (per in requiredPermissions) {
+            result = ContextCompat.checkSelfPermission(applicationContext, per)
+            if (result != PackageManager.PERMISSION_GRANTED) {
+                listPermissionsNeeded.add(per)
+            }
+        }
+        if (listPermissionsNeeded.isNotEmpty()) {
+            ActivityCompat.requestPermissions(
+                this,
+                listPermissionsNeeded.toTypedArray(),
+                Constants.REQUEST_BT_PERMISSION
+            )
         }
     }
 
