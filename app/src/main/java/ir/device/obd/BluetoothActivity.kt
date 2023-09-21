@@ -172,11 +172,19 @@ class BluetoothActivity : AppCompatActivity() {
     // --> ATRD      : Read the stored data
     // --> ATSTFF    : Set time out to maximum
     // --> ATSTHH    : Set timeout to 4ms
-    private val initCommands = arrayOf("ATL0", "ATE1", "ATH1", "ATAT1", "ATSTFF", "ATI", "ATDP", "ATSP0", "0100")
+    private val pids = arrayOf("A6", "5E")
+    private val initCommands =
+        arrayOf("ATZ", "ATL0", "ATE1", "ATH1", "ATAT1", "ATSTFF", "ATI", "ATDP", "ATSP0", "0100")
     private var initCommandIndex = 0
-    private var initCommandCount = initCommands.size
+    private var initializeCommands = false
     private fun initializeCommands() {
-
+        if (!initializeCommands) {
+            setECURequest(initCommands[initCommandIndex])
+            if (initCommandIndex == initCommands.size) {
+                initializeCommands = true
+            }
+            initCommandIndex++
+        }
     }
 
     private fun setECURequest(request: String) {
@@ -287,6 +295,12 @@ class BluetoothActivity : AppCompatActivity() {
                 val textResponse = it.data.getString("TEXT").toString()
                 val cleanResponse = cleanResponse(textResponse)
                 logcat(cleanResponse)
+
+                if (!initializeCommands) {
+                    initializeCommands()
+                }
+
+
             }
 
             Constants.STATE_CONNECT_LOST -> {
@@ -307,7 +321,7 @@ class BluetoothActivity : AppCompatActivity() {
 
             Constants.STATE_CONNECTED -> {
                 logcat("Bluetooth Device is Connected :)", "d")
-                setECURequest(Constants.ECU_RESET)
+                initializeCommands()
             }
         }
         true
