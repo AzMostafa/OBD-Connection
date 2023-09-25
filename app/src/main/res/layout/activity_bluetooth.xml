@@ -51,8 +51,8 @@
             android:id="@+id/lBluetoothDevice"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:visibility="visible"
             android:orientation="vertical"
+            android:visibility="invisible"
             android:weightSum="100">
 
             <TextView
@@ -62,18 +62,18 @@
                 android:gravity="center_vertical"
                 android:paddingHorizontal="16dp"
                 android:text="Paired Device"
-                android:textStyle="bold"
-                android:textSize="16sp"/>
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
             <ListView
                 android:id="@+id/lPairedBluetooth"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:paddingHorizontal="16dp"
-                android:layout_weight="50"
                 android:layout_marginTop="5dp"
+                android:layout_weight="50"
                 android:divider="@android:color/transparent"
-                android:dividerHeight="15dp" />
+                android:dividerHeight="15dp"
+                android:paddingHorizontal="16dp" />
 
             <TextView
                 android:layout_width="match_parent"
@@ -82,26 +82,26 @@
                 android:gravity="center_vertical"
                 android:paddingHorizontal="16dp"
                 android:text="Paired Device"
-                android:textStyle="bold"
-                android:textSize="16sp"/>
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
             <ListView
                 android:id="@+id/lDiscoveredBluetooth"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:paddingHorizontal="16dp"
-                android:layout_weight="50"
                 android:layout_marginTop="5dp"
+                android:layout_weight="50"
                 android:divider="@android:color/transparent"
-                android:dividerHeight="15dp" />
+                android:dividerHeight="15dp"
+                android:paddingHorizontal="16dp" />
         </LinearLayout>
 
         <LinearLayout
             android:id="@+id/lLogcat"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:visibility="gone"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:visibility="visible">
 
             <TextView
                 android:layout_width="match_parent"
@@ -110,47 +110,56 @@
                 android:gravity="center_vertical"
                 android:paddingHorizontal="16dp"
                 android:text="Logcat"
-                android:textStyle="bold"
-                android:textSize="16sp"/>
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
             <ListView
                 android:id="@+id/lListLogcat"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingHorizontal="10dp"
-                android:layout_weight="1"
                 android:layout_marginTop="5dp"
+                android:layout_weight="1"
                 android:animationCache="false"
                 android:background="@android:color/transparent"
                 android:cacheColorHint="@android:color/transparent"
                 android:divider="@android:color/transparent"
                 android:dividerHeight="1dp"
                 android:listSelector="@android:color/transparent"
+                android:paddingHorizontal="10dp"
                 android:scrollingCache="false"
-                android:smoothScrollbar="true" />
+                android:smoothScrollbar="true"
+                android:stackFromBottom="true"
+                android:transcriptMode="alwaysScroll" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="45dp"
                 android:layout_marginTop="16dp"
-                android:paddingHorizontal="16dp"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp">
 
                 <EditText
                     android:id="@+id/edt_SendECURequest"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_weight="1"
-                    android:textStyle="bold"
+                    android:textColor="#3578DD"
                     android:textSize="19sp"
-                    android:textColor="#3578DD"/>
+                    android:textStyle="bold" />
 
                 <Button
                     android:id="@+id/btn_SendECURequest"
                     android:layout_width="100dp"
-                    android:layout_marginLeft="16dp"
                     android:layout_height="match_parent"
+                    android:layout_marginLeft="16dp"
                     android:text="Send" />
+
+                <Button
+                    android:id="@+id/btn_SendECUATZ"
+                    android:layout_width="100dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginLeft="16dp"
+                    android:text="ATZ" />
             </LinearLayout>
         </LinearLayout>
     </RelativeLayout>

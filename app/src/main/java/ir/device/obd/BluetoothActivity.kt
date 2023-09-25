@@ -32,6 +32,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import java.lang.Math.pow
+import kotlin.math.pow
 
 @SuppressLint("InlinedApi", "MissingPermission")
 class BluetoothActivity : AppCompatActivity() {
@@ -180,7 +182,7 @@ class BluetoothActivity : AppCompatActivity() {
     private fun initializeCommands() {
         if (!initializeCommands) {
             setECURequest(initCommands[initCommandIndex])
-            if (initCommandIndex == initCommands.size) {
+            if (initCommandIndex == (initCommands.size - 1)) {
                 initializeCommands = true
             }
             initCommandIndex++
@@ -188,12 +190,12 @@ class BluetoothActivity : AppCompatActivity() {
     }
 
     private fun setECURequest(request: String) {
-        logcat("SetECURequest")
         if (bluetoothService.getState() == Constants.STATE_CONNECTED) {
             try {
                 if (request.isNotEmpty()) {
                     val textByte = request + "\r"
                     bluetoothService.write(textByte.toByteArray())
+                    logcat("SetECURequest: $request")
                 }
             } catch (e: Exception) {
                 logcat("unable to send request to ECU! \n${e.message}", "e")
@@ -218,6 +220,106 @@ class BluetoothActivity : AppCompatActivity() {
         text = text.replace("atrv", "")
 
         return text
+    }
+
+    private fun checkResponse(response: String) {
+        var dataReceived: String? = response
+        var pid: Int? = 0
+        var a: Double? = 0.0
+        var b: Double? = 0.0
+        var c: Double? = 0.0
+        var d: Double? = 0.0
+        try {
+            logcat("Check Response")
+            if (dataReceived != null && dataReceived.matches("^[0-9A-F]+$".toRegex())) {
+                dataReceived = dataReceived.trim { it <= ' ' }
+                val index = dataReceived.indexOf("41")
+                if (index != -1) {
+                    val res: String = dataReceived.substring(index, dataReceived.length)
+                    if (res.substring(0, 2) == "41") {
+                        pid = if (res.length <= 4) {
+                            res.substring(2, 4).toInt(16)
+                        } else {
+                            null
+                        }
+
+                        a = if (res.length <= 6) {
+                            res.substring(4, 6).toInt(16).toDouble()
+                        } else {
+                            null
+                        }
+
+                        b = if (res.length <= 8) {
+                            res.substring(6, 8).toInt(16).toDouble()
+                        } else {
+                            null
+                        }
+
+                        c = if (res.length <= 10) {
+                            res.substring(8, 10).toInt(16).toDouble()
+                        } else {
+                            null
+                        }
+
+                        d = if (res.length <= 12) {
+                            res.substring(10, 12).toInt(16).toDouble()
+                        } else {
+                            null
+                        }
+
+                        logcat("Response of ECU is PID=$pid, A=$a, B=$b, C=$c, D=$d")
+
+                        calculateResponse(pid, a, b, c, d)
+                    }
+                } else {
+                    logcat("Response of ECU is not Valid [41]!", "e")
+                }
+            }
+        } catch (e: Exception) {
+            logcat("unable to check response of ECU! \n${e.message}", "e")
+        }
+    }
+
+    private fun calculateResponse(pid: Int?, a: Double?, b: Double?, c: Double?, d: Double?) {
+        logcat("Calculate Response")
+        var errorParam = false
+        var value: Double = 0.0
+        when (pid) {
+            12 -> { // ---------> PID(0C): RPM [value = ((A*256)+B)/4] [rpm]
+                if (a != null && b != null) {
+                    value = (((a * 256) + b) / 4)
+                } else {
+                    errorParam = true
+                }
+            }
+
+            94 -> { // ---------> PID(5E): Engine fuel rate [value = ((A*256)+B)/20] [L/h]
+                if (a != null && b != null) {
+                    value = (((a * 256) + b) / 20)
+                } else {
+                    errorParam = true
+                }
+            }
+
+            166 -> { // --------> PID(A6): Odometer [value = ((A*(2^24))+(B*(2^16))+(C*(2^8))+D)/4] [Km]
+                if (a != null && b != null && c != null && d != null) {
+                    value = ((a * 2.0.pow(24.0)) + (b * 2.0.pow(16.0)) + (c * 2.0.pow(8.0)) + d) / 4
+                } else {
+                    errorParam = true
+                }
+            }
+
+            else -> {
+                logcat("unable to calculation response of ECU [PID=$pid]!", "e")
+            }
+        }
+
+        if (errorParam) {
+            logcat(
+                "unable to calculation response of ECU with this params [PID=$pid, A=$a, B=$b, C=$c, D=$d]!",
+                "e"
+            )
+        }
     }
 
     // ------------------------------------- Bluetooth System -----------------------------------//
@@ -292,15 +394,17 @@ class BluetoothActivity : AppCompatActivity() {
             }
 
             Constants.STATE_READ -> {
-                val textResponse = it.data.getString("TEXT").toString()
-                val cleanResponse = cleanResponse(textResponse)
-                logcat(cleanResponse)
+                val response = it.data.getString("TEXT").toString()
+                val cleanRes = cleanResponse(response)
+                logcat("Response: $cleanRes")
 
                 if (!initializeCommands) {
                     initializeCommands()
+                } else {
+                    if (!(cleanRes.contains("NODATA") || cleanRes.contains("ERROR"))) {
+                        checkResponse(cleanRes)
+                    }
                 }
-
-
             }
 
             Constants.STATE_CONNECT_LOST -> {
