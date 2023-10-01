@@ -82,6 +82,7 @@ class BluetoothActivity : AppCompatActivity() {
         // --------> Set IDs:
         val btnBTDevice = findViewById<Button>(R.id.btn_BluetoothDevice)
         val btnLogcat = findViewById<Button>(R.id.btn_LogStatus)
+        val btnATZ = findViewById<Button>(R.id.btn_SendECUATZ)
         val btnBluetooth = findViewById<Button>(R.id.btn_Bluetooth)
         val btnSendECUReuest = findViewById<Button>(R.id.btn_SendECURequest)
         val lBTDevice = findViewById<LinearLayout>(R.id.lBluetoothDevice)
@@ -129,10 +130,20 @@ class BluetoothActivity : AppCompatActivity() {
             }
         }
 
+        btnATZ.setOnClickListener {
+            if (bluetoothService.getState() == Constants.STATE_CONNECTED) {
+                val request = "ATZ"
+                setECURequest(request)
+            } else {
+                Toast.makeText(context, "Connect to OBD.", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         btnSendECUReuest.setOnClickListener {
             if (bluetoothService.getState() == Constants.STATE_CONNECTED) {
                 val request = edtECURequest.text.toString()
                 setECURequest(request)
+                edtECURequest.setText("")
             } else {
                 Toast.makeText(context, "Connect to OBD.", Toast.LENGTH_SHORT).show()
             }
@@ -159,7 +170,8 @@ class BluetoothActivity : AppCompatActivity() {
         }
     }
 
-    // ------------------------------------------- OBD -----------------------------------------//
+    // ------------------------------------------ OBD -------------------------------------------//
+    // --------------------- <<<<---- SET INIT SETTING OF DEVICE ---->>>> -----------------------//
     // --> ATZ       : reset all
     // --> ATDP      : Describe the current Protocol
     // --> ATAT0-1-2 : Adaptive Timing Off - Adaptive Timing Auto1 - Adaptive Timing Auto2
@@ -174,6 +186,43 @@ class BluetoothActivity : AppCompatActivity() {
     // --> ATRD      : Read the stored data
     // --> ATSTFF    : Set time out to maximum
     // --> ATSTHH    : Set timeout to 4ms
+    // ----------------------- <<<<---- RESPONSE FAILURE CODES ---->>>> -------------------------//
+    // --> 10	 : General Reject
+    // --> 11    : Ser  vice Not Supported
+    // --> 12    : Sub Function Not Supported - Invalid Format
+    // --> 21	 : Busy - repeat Request
+    // --> 22	 : Conditions Not Correct Or Request Sequence Error
+    // --> 23    : Routine Not Complete Or Service In Progress
+    // --> 31	 : Request Out Of Range
+    // --> 33    : Security Access Denied - security Access Requested
+    // --> 35    : Invalid Key
+    // --> 36    : Exceed Number Of Attempts
+    // --> 37    : Required Time Delay Not Expired
+    // --> 40    : Download Not Accepted
+    // --> 41    : Improper Download Type
+    // --> 42    : Can Not Download To Specified Address
+    // --> 43    : Can Not Download Number Of Bytes Requested
+    // --> 50    : Upload Not Accepted
+    // --> 51    : Improper Upload Type
+    // --> 52    : Can Not Upload From Specified Address
+    // --> 53    : Can Not Upload Number Of Bytes Requested
+    // --> 71    : Transfer Suspended
+    // --> 72    : Transfer Aborted
+    // --> 74    : Illegal Address In Block Transfer
+    // --> 75    : Illegal Byte Count In Block Transfer
+    // --> 76    : Illegal Block Transfer Type
+    // --> 77    : Block Transfer Data Checksum Error
+    // --> 78    : Request Correctly Rcvd - Rsp Pending
+    // --> 79    : Incorrect Byte Count During Block Transfer
+    // --> 80    : Service Not Supported In Active Diagnostic Mode
+    // --> C1    : Start Comments +ve response
+    // --> C2    : Stop Comments +ve response
+    // --> C3    : Access Timing Params +ve response
+    // --> 81-8F : Reserved
+    // --> 90-F9 : Vehicle manufacturer specific
+    // --> FA-FE : System supplier specific
+    // --> FF    : Reserved by document
+
     private val pids = arrayOf("A6", "5E")
     private val initCommands =
         arrayOf("ATZ", "ATL0", "ATE1", "ATH1", "ATAT1", "ATSTFF", "ATI", "ATDP", "ATSP0", "0100")
@@ -231,37 +280,40 @@ class BluetoothActivity : AppCompatActivity() {
         var d: Double? = 0.0
         try {
             logcat("Check Response")
+            logcat("dataReceived: $dataReceived")
+            logcat("dataReceived matches: ${dataReceived?.matches("^[0-9A-F]+$".toRegex())}")
+            logcat("dataReceived.trim(): ${dataReceived?.trim { it <= ' ' }}")
             if (dataReceived != null && dataReceived.matches("^[0-9A-F]+$".toRegex())) {
                 dataReceived = dataReceived.trim { it <= ' ' }
                 val index = dataReceived.indexOf("41")
                 if (index != -1) {
                     val res: String = dataReceived.substring(index, dataReceived.length)
                     if (res.substring(0, 2) == "41") {
-                        pid = if (res.length <= 4) {
+                        pid = if (res.length >= 4) {
                             res.substring(2, 4).toInt(16)
                         } else {
                             null
                         }
 
-                        a = if (res.length <= 6) {
+                        a = if (res.length >= 6) {
                             res.substring(4, 6).toInt(16).toDouble()
                         } else {
                             null
                         }
 
-                        b = if (res.length <= 8) {
+                        b = if (res.length >= 8) {
                             res.substring(6, 8).toInt(16).toDouble()
                         } else {
                             null
                         }
 
-                        c = if (res.length <= 10) {
+                        c = if (res.length >= 10) {
                             res.substring(8, 10).toInt(16).toDouble()
                         } else {
                             null
                         }
 
-                        d = if (res.length <= 12) {
+                        d = if (res.length >= 12) {
                             res.substring(10, 12).toInt(16).toDouble()
                         } else {
                             null
